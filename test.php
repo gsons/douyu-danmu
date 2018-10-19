@@ -9,7 +9,8 @@ set_error_handler('shutdown_function');
 register_shutdown_function('shutdown_function');
 
 
-$douYu = new DouYu('openbarrage.douyutv.com', 8601, 1767539);
+$douYu = new DouYu('openbarrage.douyutv.com', 8601,5670832);
+
 $douYu->onConnect = function () {
     echo '连接成功!'.PHP_EOL;
 };
@@ -22,22 +23,22 @@ $douYu->onClose = function () {
 $douYu->onMessage = function ($msg) {
     switch ($msg['type']){
         case 'chat':
-            echo "[{$msg['from']['name']}]:{$msg['content']}";
-            print PHP_EOL;
+            $content="[{$msg['from']['name']}]:{$msg['content']}";
             break;
         case 'gift':
-            echo "[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-            print PHP_EOL;
+            $content="[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
             break;
         case 'yuwan':
-            echo "[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-            print PHP_EOL;
+            $content= "[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
             break;
         case 'deserve':
-            echo  "[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-            print PHP_EOL;
+            $content="[{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
             break;
     }
+    file_put_contents('log.txt',$content.PHP_EOL,FILE_APPEND);
+    echo $content;
+    // print_r($msg);
+    print PHP_EOL;
 };
 try {
     $douYu->startTcp();

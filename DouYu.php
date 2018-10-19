@@ -219,8 +219,8 @@ class DouYu
     {
         $gift_info=$this->getGiftInfo();
         if(!$gift_info)  throw new  \Exception('获取礼物信息失败');
-        $freeGift = ['name' => '免费礼物', 'price' => 0, 'is_yuwan' => false];
-        $gift = $gift_info[$msgArr['gfid']] || $freeGift;
+        $freeGift = ['name' => '鱼丸', 'price' => 0, 'is_yuwan' => false];
+        $gift = isset($gift_info[$msgArr['gfid']])?$gift_info[$msgArr['gfid']]:$freeGift;
         $msg_obj = [
             'type' => 'gift',
             'time' => time(),
@@ -281,7 +281,7 @@ class DouYu
         ];
     }
 
-    private function getGiftInfo(){
+    public function getGiftInfo(){
         $curl = curl_init();
         curl_setopt_array($curl, array(
             CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/room/{$this->roomId}",
