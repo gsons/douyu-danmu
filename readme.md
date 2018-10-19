@@ -1,10 +1,10 @@
-# douyu
+# douyu-danmu
 
-douyu 是php版斗鱼直播弹幕监听模块。
+douyu-danmu 是php版斗鱼直播弹幕监听模块。
 
-简单易用，使用三十行左右代码，你就可以使用php基于弹幕进一步开发。
+参考:https://github.com/BacooTang/douyu-danmu
 
-## Simple uses
+## 简单使用
 
 通过如下代码，可以初步通过php对弹幕进行处理。
 
