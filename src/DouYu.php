@@ -194,9 +194,9 @@ class DouYu
     private function buildChat($msgArr)
     {
         $plat = 'pc_web';
-        if ($msgArr['ct'] == '1') {
+        if (isset($msgArr['ct'])&&$msgArr['ct'] == '1') {
             $plat = 'android';
-        } else if ($msgArr['ct'] == '2') {
+        } else if (isset($msgArr['ct'])&&$msgArr['ct'] == '2') {
             $plat = 'ios';
         }
         return [
