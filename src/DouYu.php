@@ -17,7 +17,6 @@ class DouYu
      * @access private
      * @var string
      */
-    private $address;
 
     /**
      * 端口

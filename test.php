@@ -1,6 +1,6 @@
 <?php
-require 'DouYu.php';
-require 'Message.php';
+require 'src/DouYu.php';
+require 'src/Message.php';
 use Douyu\DouYu;
 function shutdown_function()
 {
