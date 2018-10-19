@@ -21,6 +21,7 @@ $douYu->onClose = function () {
     echo '关闭连接'.PHP_EOL;
 };
 $douYu->onMessage = function ($msg) {
+    $content='';
     switch ($msg['type']){
         case 'chat':
             $content="[{$msg['from']['name']}]:{$msg['content']}";
@@ -36,7 +37,7 @@ $douYu->onMessage = function ($msg) {
             break;
     }
     file_put_contents('log.txt',$content.PHP_EOL,FILE_APPEND);
-    echo $content;
+    if($content)echo $content;
     // print_r($msg);
     print PHP_EOL;
 };
