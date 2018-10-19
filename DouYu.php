@@ -89,6 +89,7 @@ class DouYu
      */
     public function startTcp()
     {
+        $this->endTcp();
         $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         $this->socket || $this->throwSocketError('建立SOCKET失败');
         $result = socket_connect($this->socket, $this->address, $this->port);
@@ -102,6 +103,13 @@ class DouYu
         $this->readMsg();
     }
 
+    /**
+     * 停止监听弹幕
+     */
+    public function  endTcp(){
+        $this->socket && socket_close($this->socket);
+        $this->socket &&  $this->socket=null;
+    }
 
     /**
      * 发送消息
@@ -140,11 +148,9 @@ class DouYu
     private function readMsg()
     {
 
-        while (1) {
+        while (true) {
+            if(!$this->socket) break;
             $out = socket_read($this->socket, 2048); //没有数据响应 这一行会一直阻塞
-            // file_put_contents('./log.txt',$out.PHP_EOL,FILE_APPEND);
-            // $out=iconv("UTF-8", "GB2312//IGNORE", $out);
-            //echo $out;print('====================');continue;
             $this->parserChat($out);
         }
     }

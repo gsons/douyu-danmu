@@ -9,7 +9,7 @@ set_error_handler('shutdown_function');
 register_shutdown_function('shutdown_function');
 
 
-$douYu = new DouYu('openbarrage.douyutv.com', 8601,5670832);
+$douYu= new DouYu('openbarrage.douyutv.com', 8601,5670832);
 
 $douYu->onConnect = function () {
     echo '连接成功!'.PHP_EOL;
