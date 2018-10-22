@@ -6,7 +6,9 @@ douyu-danmu 是php版斗鱼直播弹幕监听模块。
 
 ## 安装
 
+```shell
 composer require gsons/douyu-danmu
+```
 
 ## 简单使用
 
