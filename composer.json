@@ -1,6 +1,6 @@
 {
   "name": "gsons/douyu-danmu",
-  "description": "斗鱼直播弹幕接口破对接",
+  "description": "斗鱼直播弹幕接口对接",
   "keywords": ["danmu", "douyu", "douyu-danmu"],
   "homepage": "https://github.com/gsons/douyu-danmu",
   "type": "library",

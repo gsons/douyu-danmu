@@ -1,18 +1,14 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Administrator
- * Date: 2018/10/18
- * Time: 14:24
- */
-
-namespace DouYu;
-
-
+namespace  DouYu;
 /**
  * Socket消息类
+ * User: Administrator
+ * Date: 2018/10/20/020
+ * Time: 21:02
  */
-class Message
+
+
+class SocketMsg
 {
     /**
      * 正文包含五个部分：

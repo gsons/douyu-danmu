@@ -1,22 +1,21 @@
 <?php
 /**
- * 斗鱼弹幕
  * Created by PhpStorm.
  * User: Administrator
- * Date: 2018/10/18
- * Time: 14:04
+ * Date: 2018/10/23
+ * Time: 14:16
  */
-
 
 namespace DouYu;
 
-class DouYu
+class Room
 {
     /**
      * TCP地址
      * @access private
      * @var string
      */
+    private $address;
 
     /**
      * 端口
@@ -31,6 +30,19 @@ class DouYu
      * @var resource
      */
     private $socket;
+
+
+    /**
+     * 心跳周期
+     * @var int
+     */
+    private $heartTime;
+
+    /**
+     * 上次发送心跳时间
+     * @var int
+     */
+    private $sendHeartTime;
 
     /**
      * 连接成功回调
@@ -68,17 +80,35 @@ class DouYu
     private $roomId;
 
     /**
+     * 斗鱼礼物信息
+     * @access private
+     * @var string
+     */
+    private $giftInfo;
+
+
+    /**
+     * 连接总数
+     * @access protected
+     * @var int
+     */
+    protected static $linkNum = 0;
+
+    /**
      * 架构方法
      * DouYu constructor.
      * @param $address
      * @param $port
      * @param  $roomId
+     * @param int $heartTime 默认45s;
      */
-    public function __construct($address, $port, $roomId)
+    public function __construct($address, $port, $roomId, $heartTime = 45)
     {
         $this->address = $address;
         $this->port = $port;
         $this->roomId = $roomId;
+        $this->heartTime = $heartTime;
+        $this->sendHeartTime = time();
     }
 
     /**
@@ -86,28 +116,31 @@ class DouYu
      * @access public
      * @throws \Exception
      */
-    public function startTcp()
+    public function join()
     {
-        $this->endTcp();
+        if (is_resource($this->socket)) return $this;
         $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        $this->socket || $this->throwSocketError('建立SOCKET失败');
-        $result = socket_connect($this->socket, $this->address, $this->port);
-        $result ? call_user_func($this->onConnect) : call_user_func($this->onError, socket_strerror(socket_last_error()));
-        $result || $this->throwSocketError('SOCKET连接失败');
+        $this->socket || $this->throwSocketError("加入斗鱼房间号{$this->roomId}时,建立SOCKET失败");
+        $result = false;//连接结果
+        if (is_resource($this->socket)) $result = socket_connect($this->socket, $this->address, $this->port);
+        $result && self::$linkNum++;
+        $result ? $this->onConnect && call_user_func($this->onConnect, self::$linkNum, $this->roomId) : $this->onError && call_user_func($this->onError, socket_strerror(socket_last_error()), $this->roomId);
+        $result || $this->throwSocketError("加入斗鱼房间号{$this->roomId}时,SOCKET连接失败");
         //登录房间
         $this->send("type@=loginreq/roomid@={$this->roomId}/");
         //加入弹幕组
         $groupId = -9999;
         $this->send(sprintf('type@=joingroup/rid@=%s/gid@=%s/', $this->roomId, $groupId));
-        $this->readMsg();
+        return $this;
     }
 
     /**
      * 停止监听弹幕
      */
-    public function  endTcp(){
-        $this->socket && socket_close($this->socket);
-        $this->socket &&  $this->socket=null;
+    public function stopTcp()
+    {
+        is_resource($this->socket) && socket_close($this->socket);
+        is_resource($this->socket) && $this->socket = null;
     }
 
     /**
@@ -118,11 +151,12 @@ class DouYu
      */
     private function send($msg)
     {
-        $message = new Message($msg);
+        $message = new SocketMsg($msg);
         $byte = $message->getByte();
         $length = $message->getLength();
-        $res = socket_write($this->socket, $byte, $length);
-        $res || $this->throwSocketError('SOCKET 发送消息失败');
+        $res = false;
+        if (is_resource($this->socket)) $res = socket_write($this->socket, $byte, $length);
+        $res || $this->throwSocketError("斗鱼房间号{$this->roomId},SOCKET 发送消息失败");
     }
 
 
@@ -134,23 +168,55 @@ class DouYu
      */
     private function throwSocketError($msg)
     {
-        call_user_func($this->onClose);
-        $this->socket && socket_close($this->socket);
-        throw new  \Exception("{$msg}:" . socket_strerror(socket_last_error()));
+        self::$linkNum--;
+        call_user_func($this->onClose, self::$linkNum, $this->roomId);
+        is_resource($this->socket) && socket_close($this->socket);
+        $errMsg = socket_strerror(socket_last_error());
+        throw new  \Exception("{$msg}:" . iconv('gbk//TRANSLIT', 'UTF-8', $errMsg));
     }
 
     /**
-     * 读取消息
+     * 启动循环读取
      * @access private
      * @throws \Exception
      */
-    private function readMsg()
+    public function runLoopRead()
     {
-
         while (true) {
-            if(!$this->socket) break;
-            $out = socket_read($this->socket, 2048); //没有数据响应 这一行会一直阻塞
+            if (!$this->socket) break;
+            if (time() - $this->sendHeartTime > $this->heartTime) {
+                $this->sendHeartTime = time();
+                $this->send(sprintf('type@=keeplive/tick@=%s/', $this->sendHeartTime));
+            }
+            $out = false;
+            if (is_resource($this->socket)) $out = socket_read($this->socket, 2048);
+            if ($out !== false) {
+                $this->parserChat($out);
+            } else {
+                $this->throwSocketError("斗鱼房间号{$this->roomId},SOCKET 接收消息失败");
+            }
+        }
+    }
+
+    /**
+     * 单次读取socket
+     * @access private
+     * @throws \Exception
+     */
+    public function runSingleRead()
+    {
+        if (!$this->socket) return;
+        if (time() - $this->sendHeartTime > $this->heartTime) {
+            $this->sendHeartTime = time();
+            $this->send(sprintf('type@=keeplive/tick@=%s/', $this->sendHeartTime));
+        }
+        $out = false;
+        if (is_resource($this->socket)) $out = @socket_read($this->socket, 2048);
+        if ($out !== false) {
             $this->parserChat($out);
+        } else {
+//            $this->socket=null;
+            $this->throwSocketError("斗鱼房间号{$this->roomId},SOCKET 接收消息失败");
         }
     }
 
@@ -180,7 +246,7 @@ class DouYu
                     $msg_obj = $this->buildDeserve($obj);
                     break;
             }
-            $msg_obj && call_user_func($this->onMessage, $msg_obj);
+            if ($this->onMessage && $msg_obj) call_user_func($this->onMessage, $msg_obj);
         }
 
     }
@@ -194,23 +260,23 @@ class DouYu
     private function buildChat($msgArr)
     {
         $plat = 'pc_web';
-        if (isset($msgArr['ct'])&&$msgArr['ct'] == '1') {
+        if (isset($msgArr['ct']) && $msgArr['ct'] == '1') {
             $plat = 'android';
-        } else if (isset($msgArr['ct'])&&$msgArr['ct'] == '2') {
+        } else if (isset($msgArr['ct']) && $msgArr['ct'] == '2') {
             $plat = 'ios';
         }
-        return [
+        return array(
             'type' => 'chat',
             'time' => time(),
             'id' => $msgArr['cid'],
             'content' => $msgArr['txt'],
-            'from' => [
+            'from' => array(
                 'name' => $msgArr['nn'],
                 'rid' => $msgArr['uid'],
                 'level' => $msgArr['level'],
                 'plat' => $plat
-            ]
-        ];
+            )
+        );
     }
 
     /**
@@ -222,24 +288,24 @@ class DouYu
      */
     private function buildGift($msgArr)
     {
-        $gift_info=$this->getGiftInfo();
-        if(!$gift_info)  throw new  \Exception('获取礼物信息失败');
-        $freeGift = ['name' => '鱼丸', 'price' => 0, 'is_yuwan' => false];
-        $gift = isset($gift_info[$msgArr['gfid']])?$gift_info[$msgArr['gfid']]:$freeGift;
-        $msg_obj = [
+        $this->giftInfo = $this->giftInfo || $this->getGiftInfo();
+        if (!$this->giftInfo) throw new  \Exception('获取礼物信息失败');
+        $freeGift = array('name' => '鱼丸', 'price' => 0, 'is_yuwan' => false);
+        $gift = isset($this->giftInfo[$msgArr['gfid']]) ? $this->giftInfo[$msgArr['gfid']] : $freeGift;
+        $msg_obj = array(
             'type' => 'gift',
             'time' => time(),
             'name' => $gift['name'],
-            'from' => [
+            'from' => array(
                 'name' => $msgArr['nn'],
-                'rid' => $msgArr['uid'],
+                //'rid' => $msgArr['uid'],
                 'level' => $msgArr['level']
-            ],
-            'id' => `{$msgArr['uid']}{$msgArr['rid']}{$msgArr['gfid']}{$msgArr['hits']}{$msgArr['level']}`,
+            ),
+            // 'id' => `{$msgArr['uid']}{$msgArr['rid']}{$msgArr['gfid']}{$msgArr['hits']}{$msgArr['level']}`,
             'count' => $msgArr['gfcnt'] || 1,
             'price' => ($msgArr['gfcnt'] || 1) * $gift['price'],
             'earn' => ($msgArr['gfcnt'] || 1) * $gift['price']
-        ];
+        );
         if ($gift['is_yuwan']) {
             $msg_obj['type'] = 'yuwan';
             unset($msg_obj['price']);
@@ -270,23 +336,24 @@ class DouYu
         $sui = preg_replace('/@S/g', '","', $sui);
         $sui = substr(0, strlen($sui) - 2, $sui);
         $sui = json_decode($sui, true);
-        return [
+        return array(
             'type' => 'deserve',
             'time' => time(),
             'name' => $name,
-            'from' => [
+            'from' => array(
                 'name' => $sui['nick'],
-                'rid' => $sui['id'],
+                //'rid' => $sui['id'],
                 'level' => $sui['level'],
-            ],
-            'id' => "{$sui['id']}{$msgArr['rid']}{$msgArr['lev']}{$msgArr['hits']}{$sui['level']}{$sui['exp']}",
+            ),
+            //'id' => "{$sui['id']}{$msgArr['rid']}{$msgArr['lev']}{$msgArr['hits']}{$sui['level']}{$sui['exp']}",
             'count' => $msgArr['cnt'] || 1,
             'price' => $price,
             'earn' => $price
-        ];
+        );
     }
 
-    public function getGiftInfo(){
+    public function getGiftInfo()
+    {
         $curl = curl_init();
         curl_setopt_array($curl, array(
             CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/room/{$this->roomId}",
@@ -307,14 +374,68 @@ class DouYu
         if ($err) {
             return false;
         } else {
-            $info=json_decode($response,true);
-            $res=[];
-            foreach ($info['data']['gift'] as $v){
-                $res[$v['id']]=['name'=>$v['name'], 'price'=>$v['pc'], 'is_yuwan'=>$v['type']== '1' ? true : false ];
+            $info = json_decode($response, true);
+            $res = array();
+            foreach ($info['data']['gift'] as $v) {
+                $res[$v['id']] = array('name' => $v['name'], 'price' => $v['pc'], 'is_yuwan' => $v['type'] == '1' ? true : false);
             }
             return $res;
         }
     }
+
+    /**
+     * @return string
+     */
+    public function getAddress()
+    {
+        return $this->address;
+    }
+
+
+    /**
+     * @return string
+     */
+    public function getPort()
+    {
+        return $this->port;
+    }
+
+
+    /**
+     * @return resource
+     */
+    public function getSocket()
+    {
+        return $this->socket;
+    }
+
+    /**
+     * @return int
+     */
+    public function getHeartTime()
+    {
+        return $this->heartTime;
+    }
+
+
+    /**
+     * @return int
+     */
+    public function getSendHeartTime()
+    {
+        return $this->sendHeartTime;
+    }
+
+
+    /**
+     * @return string
+     */
+    public function getRoomId()
+    {
+        return $this->roomId;
+    }
+
+
 }
 
 
