@@ -95,6 +95,12 @@ class Room
     protected static $linkNum = 0;
 
     /**
+     * 心跳周期
+     * @var int
+     */
+    private $isLinked;
+
+    /**
      * 架构方法
      * DouYu constructor.
      * @param $address
@@ -108,6 +114,7 @@ class Room
         $this->port = $port;
         $this->roomId = $roomId;
         $this->heartTime = $heartTime;
+        $this->isLinked=false;
         $this->sendHeartTime = time();
     }
 
@@ -119,11 +126,11 @@ class Room
     public function join()
     {
         if (is_resource($this->socket)) return $this;
-        $this->socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        $this->socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         $this->socket || $this->throwSocketError("加入斗鱼房间号{$this->roomId}时,建立SOCKET失败");
         $result = false;//连接结果
-        if (is_resource($this->socket)) $result = socket_connect($this->socket, $this->address, $this->port);
-        $result && self::$linkNum++;
+        if (is_resource($this->socket)) $result = @socket_connect($this->socket, $this->address, $this->port);
+        $result && self::$linkNum++; $result && $this->isLinked=true;
         $result ? $this->onConnect && call_user_func($this->onConnect, self::$linkNum, $this->roomId) : $this->onError && call_user_func($this->onError, socket_strerror(socket_last_error()), $this->roomId);
         $result || $this->throwSocketError("加入斗鱼房间号{$this->roomId}时,SOCKET连接失败");
         //登录房间
@@ -139,7 +146,7 @@ class Room
      */
     public function stopTcp()
     {
-        is_resource($this->socket) && socket_close($this->socket);
+        is_resource($this->socket) && @socket_close($this->socket);
         is_resource($this->socket) && $this->socket = null;
     }
 
@@ -155,7 +162,7 @@ class Room
         $byte = $message->getByte();
         $length = $message->getLength();
         $res = false;
-        if (is_resource($this->socket)) $res = socket_write($this->socket, $byte, $length);
+        if (is_resource($this->socket)) $res = @socket_write($this->socket, $byte, $length);
         $res || $this->throwSocketError("斗鱼房间号{$this->roomId},SOCKET 发送消息失败");
     }
 
@@ -168,10 +175,14 @@ class Room
      */
     private function throwSocketError($msg)
     {
-        self::$linkNum--;
+       
         call_user_func($this->onClose, self::$linkNum, $this->roomId);
-        is_resource($this->socket) && socket_close($this->socket);
-        $errMsg = socket_strerror(socket_last_error());
+        if(is_resource($this->socket)){
+              @socket_close($this->socket);
+              if($this->isLinked) self::$linkNum--;
+              $this->isLinked=false;
+        }
+        $errMsg = @socket_strerror(@socket_last_error());
         throw new  \Exception("{$msg}:" . iconv('gbk//TRANSLIT', 'UTF-8', $errMsg));
     }
 

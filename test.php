@@ -46,28 +46,24 @@ foreach ($roomObjArr as $room) {
         }
         if ($content) {
             Log::log($content);
-            echo $content . PHP_EOL;
+            gbk_echo($content);
         }
     };
     $room->onConnect = function ($linkNum) use ($room) {
         $roomId = $room->getRoomId();
         $content = "成功连接到斗鱼房间号{$roomId},当前连接总数{$linkNum}";
-        echo $content . PHP_EOL;
+        gbk_echo($content);
         Log::log($content, LOG::WARN);
-    };
-    $room->onError = function () {
-        $content = "建立连接失败!!!!!!!!";
-        echo $content . PHP_EOL;
-        Log::log($content, LOG::ERROR);
     };
     $room->onClose = function ($linkNum, $roomID) {
         $content = "由于程序发生异常已关闭连接房间号{$roomID}!当前连接数{$linkNum}";
-        echo $content . PHP_EOL;
+        gbk_echo($content);
         Log::log($content, LOG::ERROR);
     };
     $room->onError = function ($errorMsg, $roomID) {
-        $content = "房间号{$roomID},{$errorMsg},无法建立连接";
-        echo $content . PHP_EOL;
+        $errorMsg=iconv('gbk//TRANSLIT', 'UTF-8', $errorMsg);
+        $content = "无法建立连接,房间号{$roomID},{$errorMsg}";
+        gbk_echo($content);
         Log::log($content, LOG::ERROR);
     };
 }
@@ -77,7 +73,7 @@ while (true) {
         try {
             $room->join()->runSingleRead();
         } catch (\Exception $e) {
-            echo($e->getMessage());
+            gbk_echo($e->getMessage());
             Log::log($e->getMessage(), LOG::ERROR);
         }
     }
@@ -88,7 +84,7 @@ function getRoomIdArr()
 {
     $curl = curl_init();
     curl_setopt_array($curl, array(
-        CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/live",
+        CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/live?offset=0&limit=10",
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => "",
         CURLOPT_MAXREDIRS => 10,
@@ -104,6 +100,7 @@ function getRoomIdArr()
     $err = curl_error($curl);
     curl_close($curl);
     if ($err) {
+        Log::log('获取房间列表失败:'.$err, LOG::ERROR);
         return array();
     } else {
         $arr = json_decode($response, true);
@@ -115,3 +112,10 @@ function getRoomIdArr()
 
     }
 }
+
+function gbk_echo($msg){
+    echo iconv('UTF-8','gbk//IGNORE', $msg).PHP_EOL;
+}
+
+
+
