@@ -95,16 +95,6 @@ while (true) {
 
 ## API
 
-### 开始监听弹幕
-
-```php
-$douYu = new DouYu('openbarrage.douyutv.com', 8601,5670832);
-try {
-    $douYu->startTcp();
-} catch (\Exception $e) {
-    exit($e->getMessage());
-}
-```
 
 
 #### chat消息
