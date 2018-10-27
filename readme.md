@@ -15,7 +15,6 @@ composer require gsons/douyu-danmu
 通过如下代码，可以初步通过php对弹幕进行处理。
 
 ```php
-
 require_once __DIR__ . '/src/SocketMsg.php';
 require_once __DIR__ . '/src/Room.php';
 require_once __DIR__ . '/src/Log.php';
@@ -30,35 +29,50 @@ defined('DouYuPort') || define('DouYuPort', 8601);
 
 Log::log("程序启动!", LOG::WARN);
 
-$roomDataArr=getRoomIdArr();$roomObjArr=array();
-foreach ($roomDataArr as $roomData){
-    array_push($roomObjArr,new  Room(DouYuHost, DouYuPort, $roomData['room_id']));
+// $roomDataArr = getRoomIdArr(0, 99);
+$roomDataArr=array_merge(
+    getRoomIdArr(0, 99),
+    getRoomIdArr(100, 99),
+    getRoomIdArr(200, 99),getRoomIdArr(300, 99),getRoomIdArr(400, 99),
+    getRoomIdArr(500, 99),getRoomIdArr(600, 99)
+);
+// print_r(count($roomDataArr));exit;
+$roomObjArr = array();
+foreach ($roomDataArr as $roomData) {
+    array_push($roomObjArr, new  Room(DouYuHost, DouYuPort, $roomData['room_id'], 20));
 }
-
-//@var $room Room
+unset($roomDataArr);
 foreach ($roomObjArr as $room) {
-    $room->onMessage = function ($msg) use ($room) {
-        $content = '';
-        $roomId = $room->getRoomId();
-        switch ($msg['type']) {
-            case 'chat':
-                $content = "[房间号:{$roomId}] [{$msg['from']['name']}]:{$msg['content']}";
-                break;
-            case 'gift':
-                $content = "[房间号:{$roomId}] [{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-                break;
-            case 'yuwan':
-                $content = "[房间号:{$roomId}] [{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-                break;
-            case 'deserve':
-                $content = "[房间号:{$roomId}] [{$msg['from']['name']}]->赠送{$msg['count']}个{$msg['name']}";
-                break;
-        }
-        if ($content) {
-            Log::log($content);
-            gbk_echo($content);
-        }
-    };
+   
+    try {
+        $room->onMessage=function($msg_obj,$roomId) {
+            if ($msg_obj) {
+                $content='';
+                switch ($msg_obj['type']) {
+                    case 'chat':
+                        $content = "[房间号:{$roomId}] [{$msg_obj['from']['name']}]:{$msg_obj['content']}";
+                        break;
+                    case 'gift':
+                        $content = "[房间号:{$roomId}] [{$msg_obj['from']['name']}]->赠送{$msg_obj['count']}个{$msg_obj['name']}";
+                        break;
+                    case 'yuwan':
+                        $content = "[房间号:{$roomId}] [{$msg_obj['from']['name']}]->赠送{$msg_obj['count']}个{$msg_obj['name']}";
+                        break;
+                    case 'deserve':
+                        $content = "[房间号:{$roomId}] [{$msg_obj['from']['name']}]->赠送{$msg_obj['count']}个{$msg_obj['name']}";
+                        break;
+                }
+               if($content) echo iconv('UTF-8','gbk//IGNORE', $content).PHP_EOL;
+               unset($content);
+            }
+        };
+        $room->joinIn();
+        $room->start();
+
+    } catch (\Exception $e) {
+        gbk_echo($e->getMessage());
+        Log::log($e->getMessage(), LOG::ERROR);
+    }
     $room->onConnect = function ($linkNum) use ($room) {
         $roomId = $room->getRoomId();
         $content = "成功连接到斗鱼房间号{$roomId},当前连接总数{$linkNum}";
@@ -78,23 +92,12 @@ foreach ($roomObjArr as $room) {
     };
 }
 
-while (true) {
-    foreach ($roomObjArr as $room) {
-        try {
-            $room->join()->runSingleRead();
-        } catch (\Exception $e) {
-            gbk_echo($e->getMessage());
-            Log::log($e->getMessage(), LOG::ERROR);
-        }
-    }
-}
 
-
-function getRoomIdArr()
+function getRoomIdArr($offset = 0, $limit = 99)
 {
     $curl = curl_init();
     curl_setopt_array($curl, array(
-        CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/live?offset=0&limit=10",
+        CURLOPT_URL => "http://open.douyucdn.cn/api/RoomApi/live?offset={$offset}&limit={$limit}",
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => "",
         CURLOPT_MAXREDIRS => 10,
@@ -110,7 +113,7 @@ function getRoomIdArr()
     $err = curl_error($curl);
     curl_close($curl);
     if ($err) {
-        Log::log('获取房间列表失败:'.$err, LOG::ERROR);
+        Log::log('获取房间列表失败:' . $err, LOG::ERROR);
         return array();
     } else {
         $arr = json_decode($response, true);
@@ -123,8 +126,9 @@ function getRoomIdArr()
     }
 }
 
-function gbk_echo($msg){
-    echo iconv('UTF-8','gbk//IGNORE', $msg).PHP_EOL;
+function gbk_echo($msg)
+{
+    echo iconv('UTF-8', 'gbk//IGNORE', $msg).PHP_EOL;
 }
 
 ```

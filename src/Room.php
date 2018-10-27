@@ -8,7 +8,7 @@
 
 namespace DouYu;
 
-class Room
+class Room extends \Thread
 {
     /**
      * TCP地址
@@ -118,12 +118,31 @@ class Room
         $this->sendHeartTime = time();
     }
 
+    public  function run()
+    {
+        while (true) {
+            if (!$this->socket) break;
+            if (time() - $this->sendHeartTime > $this->heartTime) {
+                $this->sendHeartTime = time();
+                $this->send(sprintf('type@=keeplive/tick@=%s/', $this->sendHeartTime));
+            }
+            $out = false;
+            if (is_resource($this->socket)) $out = @socket_read($this->socket, 2048);
+            if ($out !== false) {
+                $this->parserChat($out);
+                unset($out);
+            } else {
+                $this->throwSocketError("斗鱼房间号{$this->roomId},SOCKET 接收消息失败");
+            }
+        }
+    }
+
     /**
      * 启动TCP 建立连接
      * @access public
      * @throws \Exception
      */
-    public function join()
+    public function joinIn()
     {
         if (is_resource($this->socket)) return $this;
         $this->socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -156,7 +175,7 @@ class Room
      * @access private
      * @throws \Exception
      */
-    private function send($msg)
+    public  function send($msg)
     {
         $message = new SocketMsg($msg);
         $byte = $message->getByte();
@@ -173,7 +192,7 @@ class Room
      * @param $msg
      * @throws \Exception
      */
-    private function throwSocketError($msg)
+    public  function throwSocketError($msg)
     {
        
         call_user_func($this->onClose, self::$linkNum, $this->roomId);
@@ -257,7 +276,8 @@ class Room
                     $msg_obj = $this->buildDeserve($obj);
                     break;
             }
-            if ($this->onMessage && $msg_obj) call_user_func($this->onMessage, $msg_obj);
+            if($msg_obj) call_user_func($this->onMessage,$msg_obj,$this->getRoomId());
+            unset($msg_obj);
         }
 
     }
@@ -268,7 +288,7 @@ class Room
      * @param $msgArr
      * @return array
      */
-    private function buildChat($msgArr)
+    public  function buildChat($msgArr)
     {
         $plat = 'pc_web';
         if (isset($msgArr['ct']) && $msgArr['ct'] == '1') {
@@ -297,7 +317,7 @@ class Room
      * @return mixed
      * @throws \Exception
      */
-    private function buildGift($msgArr)
+    public  function buildGift($msgArr)
     {
         $this->giftInfo = $this->giftInfo || $this->getGiftInfo();
         if (!$this->giftInfo) throw new  \Exception('获取礼物信息失败');
@@ -331,7 +351,7 @@ class Room
      * @param $msgArr
      * @return mixed
      */
-    private function buildDeserve($msgArr)
+    public  function buildDeserve($msgArr)
     {
         $name = '初级酬勤';
         $price = 15;
